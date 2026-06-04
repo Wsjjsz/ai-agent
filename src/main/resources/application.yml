@@ -1,0 +1,189 @@
+spring:
+  application:
+    name: ai-agent
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:prod}
+  lifecycle:
+    timeout-per-shutdown-phase: ${SPRING_SHUTDOWN_TIMEOUT:30s}
+  servlet:
+    multipart:
+      max-file-size: 2MB
+      max-request-size: 3MB
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/aiagent}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${DB_PASSWORD:psswd}
+    hikari:
+      maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE:20}
+      minimum-idle: ${SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE:5}
+      connection-timeout: ${SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT:30000}
+      validation-timeout: ${SPRING_DATASOURCE_HIKARI_VALIDATION_TIMEOUT:5000}
+      idle-timeout: ${SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT:600000}
+      max-lifetime: ${SPRING_DATASOURCE_HIKARI_MAX_LIFETIME:1800000}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:0}
+      timeout: ${REDIS_TIMEOUT:2s}
+  sql:
+    init:
+      mode: ${SPRING_SQL_INIT_MODE:always}
+      schema-locations: classpath:sql/schema.sql
+  ai:
+    dashscope:
+      # 从环境变量读取 API Key，避免硬编码真实密钥。
+      api-key: ${DASHSCOPE_API_KEY:}
+      chat:
+        options:
+          # 当前应用使用 Spring AI Alibaba 的 DashScope text-generation ChatModel。
+          # qwen-plus 对普通问答和工具调用更稳；长上下文可按需改为 qwen-max-longcontext。
+          model: ${DASHSCOPE_MODEL:qwen-long}
+    ollama:
+      base-url: http://localhost:11434
+      chat:
+        model: gemma3:1b
+# MCP 服务配置（已禁用，因为 MCP 服务器 JAR 文件不存在）
+#    mcp:
+#      client:
+#        sse:
+#          connections:
+#            server1:
+#              url: http://localhost:8127
+#        stdio:
+#          servers-configuration: classpath:mcp-servers.json
+# PgVector 向量存储配置（已禁用，需要安装 pgvector 扩展）
+#    vectorstore:
+#      pgvector:
+#        index-type: HNSW
+#        dimensions: 1536
+#        distance-type: COSINE_DISTANCE
+#        max-document-batch-size: 10000 # Optional: Maximum number of documents per batch
+server:
+  port: 8123
+  shutdown: graceful
+  tomcat:
+    threads:
+      max: ${SERVER_TOMCAT_THREADS_MAX:200}
+      min-spare: ${SERVER_TOMCAT_THREADS_MIN_SPARE:20}
+    accept-count: ${SERVER_TOMCAT_ACCEPT_COUNT:200}
+    max-connections: ${SERVER_TOMCAT_MAX_CONNECTIONS:8192}
+    connection-timeout: ${SERVER_TOMCAT_CONNECTION_TIMEOUT:30s}
+  servlet:
+    context-path: /api
+# springdoc-openapi config
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+  group-configs:
+    - group: 'default'
+      paths-to-match: '/**'
+      packages-to-scan: com.aiagent.controller
+# knife4j config
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+# searchAPI
+search-api:
+  # 当前 SearchAPI 配额不稳定，默认不暴露给 Agent；需要时可显式开启
+  enabled: false
+  # 从环境变量读取 API Key，避免硬编码真实密钥。
+  api-key: ${SEARCH_API_KEY:}
+exa:
+  # 从环境变量 EXA_API_KEY 配置，不要提交真实密钥。
+  api-key: ${EXA_API_KEY:}
+# 应用 API Key 认证（可选，留空则跳过认证）
+app:
+  api-key: ${APP_API_KEY:}
+  ai:
+    max-concurrent-requests: ${APP_AI_MAX_CONCURRENT_REQUESTS:20}
+    queue:
+      enabled: ${APP_AI_QUEUE_ENABLED:false}
+      worker-threads: ${APP_AI_QUEUE_WORKER_THREADS:8}
+      capacity: ${APP_AI_QUEUE_CAPACITY:200}
+      offer-timeout-ms: ${APP_AI_QUEUE_OFFER_TIMEOUT_MS:200}
+  auth:
+    jwt-secret: ${APP_AUTH_JWT_SECRET:ai-agent-local-dev-secret-change-me}
+    token-ttl-seconds: 604800
+    sms-code-secret: ${APP_AUTH_SMS_CODE_SECRET:ai-agent-sms-local-secret-change-me}
+    sms-code-store: ${APP_AUTH_SMS_CODE_STORE:db}
+    sms-ttl-seconds: 300
+    sms-resend-interval-seconds: 60
+    sms-max-send-per-day: 5
+    sms-max-send-per-ip-per-day: 30
+    sms-max-send-per-device-per-day: 10
+    sms-max-attempts: 5
+    avatar-dir: tmp/avatar
+    blocked-usernames: ${APP_AUTH_BLOCKED_USERNAMES:demo,analyst,admin}
+    sms-provider: ${APP_AUTH_SMS_PROVIDER:mock}
+    sms-http:
+      endpoint: ${APP_AUTH_SMS_HTTP_ENDPOINT:}
+      secret: ${APP_AUTH_SMS_HTTP_SECRET:}
+  cors:
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173}
+  guest:
+    free-limit: ${APP_GUEST_FREE_LIMIT:3}
+    quota-store: ${APP_GUEST_QUOTA_STORE:db}
+  rate-limit:
+    enabled: ${APP_RATE_LIMIT_ENABLED:false}
+    store: ${APP_RATE_LIMIT_STORE:redis}
+    default-capacity: ${APP_RATE_LIMIT_DEFAULT_CAPACITY:120}
+    default-refill-per-minute: ${APP_RATE_LIMIT_DEFAULT_REFILL_PER_MINUTE:120}
+    ai-capacity: ${APP_RATE_LIMIT_AI_CAPACITY:20}
+    ai-refill-per-minute: ${APP_RATE_LIMIT_AI_REFILL_PER_MINUTE:20}
+  file-access-token-ttl-seconds: ${APP_FILE_ACCESS_TOKEN_TTL_SECONDS:300}
+  storage:
+    provider: ${APP_STORAGE_PROVIDER:local}
+    object:
+      endpoint: ${APP_STORAGE_OBJECT_ENDPOINT:}
+      bucket: ${APP_STORAGE_OBJECT_BUCKET:}
+      public-base-url: ${APP_STORAGE_OBJECT_PUBLIC_BASE_URL:}
+      access-key: ${APP_STORAGE_OBJECT_ACCESS_KEY:}
+      secret-key: ${APP_STORAGE_OBJECT_SECRET_KEY:}
+  trust-proxy-headers: ${APP_TRUST_PROXY_HEADERS:false}
+  tools:
+    terminal:
+      enabled: ${APP_TOOL_TERMINAL_ENABLED:false}
+  rag:
+    # 可选值：simple / pgvector。生产环境安装 pgvector 后可切换为 pgvector
+    vector-store: pgvector
+    # 启动期不调用大模型做关键词增强，避免模型额度/端点异常拖垮主应用
+    keyword-enrichment:
+      enabled: false
+    # RAG 索引失败时后端仍可启动，主聊天、热点、工具链路不被 RAG 初始化阻塞
+    index-on-startup: true
+    incremental:
+      # manifest 为空但 vector_store 已有同 sourcePath 切片时，先写 manifest 并跳过重新 embedding，便于从旧索引平滑迁移
+      adopt-existing-without-manifest: true
+    pdf:
+      # 将 resources/finance_pdfs 下的金融相关 PDF 纳入 RAG；会过滤明显无关书籍，避免召回噪声。
+      enabled: true
+      max-documents: 100
+      max-pages-per-document: 1000
+      max-chars-per-document: 1000000
+# 修改日志级别，查看 Spring AI 更多调用细节
+logging:
+  pattern:
+    level: "%5p [traceId:%X{traceId:-}]"
+  level:
+    org.springframework.ai: DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when_authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}

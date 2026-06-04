@@ -1,0 +1,252 @@
+[
+  {
+    "query": "股票市盈率高是不是一定贵",
+    "expectedCategory": "stocks",
+    "expectedAnyKeyword": ["市盈率", "估值", "股票"]
+  },
+  {
+    "query": "普通股和优先股有什么区别",
+    "expectedCategory": "stocks",
+    "expectedAnyKeyword": ["普通股", "优先股", "股东权益"]
+  },
+  {
+    "query": "成长股和价值股应该怎么区分",
+    "expectedCategory": "stocks",
+    "expectedAnyKeyword": ["成长股", "价值股", "估值"]
+  },
+  {
+    "query": "怎么看上市公司的财务质量",
+    "expectedCategory": "stocks",
+    "expectedAnyKeyword": ["财务质量", "经营现金流", "基本面"]
+  },
+  {
+    "query": "股票分红和股息率有什么意义",
+    "expectedCategory": "stocks",
+    "expectedAnyKeyword": ["分红", "股息率", "股息"]
+  },
+  {
+    "query": "ETF和普通基金有什么区别",
+    "expectedCategory": "funds",
+    "expectedAnyKeyword": ["ETF", "指数基金", "跟踪误差"]
+  },
+  {
+    "query": "基金定投适合什么人",
+    "expectedCategory": "funds",
+    "expectedAnyKeyword": ["基金定投", "定投", "长期"]
+  },
+  {
+    "query": "主动基金和指数基金怎么选",
+    "expectedCategory": "funds",
+    "expectedAnyKeyword": ["主动基金", "指数基金", "基金经理"]
+  },
+  {
+    "query": "基金申购费赎回费和管理费怎么看",
+    "expectedCategory": "funds",
+    "expectedAnyKeyword": ["申购费", "赎回费", "管理费"]
+  },
+  {
+    "query": "指数基金跟踪误差是什么意思",
+    "expectedCategory": "funds",
+    "expectedAnyKeyword": ["跟踪误差", "指数基金", "ETF"]
+  },
+  {
+    "query": "债券基金久期风险怎么看",
+    "expectedCategory": "bonds",
+    "expectedAnyKeyword": ["久期", "利率风险", "债券基金"]
+  },
+  {
+    "query": "信用利差是什么意思",
+    "expectedCategory": "bonds",
+    "expectedAnyKeyword": ["信用利差", "信用风险", "债券"]
+  },
+  {
+    "query": "利率上升为什么债券价格会下跌",
+    "expectedCategory": "bonds",
+    "expectedAnyKeyword": ["利率", "债券价格", "利率风险"]
+  },
+  {
+    "query": "可转债有哪些主要风险",
+    "expectedCategory": "bonds",
+    "expectedAnyKeyword": ["可转债", "信用风险", "股性"]
+  },
+  {
+    "query": "国债和信用债有什么区别",
+    "expectedCategory": "bonds",
+    "expectedAnyKeyword": ["国债", "信用债", "信用风险"]
+  },
+  {
+    "query": "黄金和实际利率是什么关系",
+    "expectedCategory": "gold_commodities",
+    "expectedAnyKeyword": ["实际利率", "黄金", "美元"]
+  },
+  {
+    "query": "黄金ETF和实物黄金哪个更适合普通投资者",
+    "expectedCategory": "gold_commodities",
+    "expectedAnyKeyword": ["黄金ETF", "实物黄金", "流动性"]
+  },
+  {
+    "query": "央行购金会怎样影响金价",
+    "expectedCategory": "gold_commodities",
+    "expectedAnyKeyword": ["央行购金", "黄金", "储备"]
+  },
+  {
+    "query": "商品期货展期收益是什么意思",
+    "expectedCategory": "gold_commodities",
+    "expectedAnyKeyword": ["商品期货", "展期收益", "移仓"]
+  },
+  {
+    "query": "原油和铜为什么被看作宏观指标",
+    "expectedCategory": "gold_commodities",
+    "expectedAnyKeyword": ["原油", "铜", "大宗商品"]
+  },
+  {
+    "query": "重疾险和医疗险有什么区别",
+    "expectedCategory": "insurance",
+    "expectedAnyKeyword": ["重疾险", "医疗险", "保险"]
+  },
+  {
+    "query": "定期寿险适合哪些家庭",
+    "expectedCategory": "insurance",
+    "expectedAnyKeyword": ["定期寿险", "家庭经济支柱", "保额"]
+  },
+  {
+    "query": "保险合同里的责任免除要怎么看",
+    "expectedCategory": "insurance",
+    "expectedAnyKeyword": ["责任免除", "保险责任", "合同"]
+  },
+  {
+    "query": "年金险是不是理财产品",
+    "expectedCategory": "insurance",
+    "expectedAnyKeyword": ["年金险", "现金流", "流动性"]
+  },
+  {
+    "query": "健康告知为什么会影响理赔",
+    "expectedCategory": "insurance",
+    "expectedAnyKeyword": ["健康告知", "理赔", "保险"]
+  },
+  {
+    "query": "CPI上升对债券和股票有什么影响",
+    "expectedCategory": "macro",
+    "expectedAnyKeyword": ["CPI", "通胀", "利率"]
+  },
+  {
+    "query": "PMI指标应该怎么看",
+    "expectedCategory": "macro",
+    "expectedAnyKeyword": ["PMI", "景气", "先行"]
+  },
+  {
+    "query": "货币政策宽松通常利好哪些资产",
+    "expectedCategory": "macro",
+    "expectedAnyKeyword": ["货币政策", "宽松", "利率"]
+  },
+  {
+    "query": "社融和信贷数据代表什么",
+    "expectedCategory": "macro",
+    "expectedAnyKeyword": ["社融", "信贷", "信用"]
+  },
+  {
+    "query": "滞胀环境下资产表现有什么特点",
+    "expectedCategory": "macro",
+    "expectedAnyKeyword": ["滞胀", "通胀", "经济周期"]
+  },
+  {
+    "query": "股息红利税属于什么投资税务问题",
+    "expectedCategory": "tax",
+    "expectedAnyKeyword": ["股息红利税", "个人所得税", "税务"]
+  },
+  {
+    "query": "资本利得和资本损失有什么区别",
+    "expectedCategory": "tax",
+    "expectedAnyKeyword": ["资本利得", "资本损失", "成本基础"]
+  },
+  {
+    "query": "为什么投资要看税后收益",
+    "expectedCategory": "tax",
+    "expectedAnyKeyword": ["税后收益", "税前收益", "税务"]
+  },
+  {
+    "query": "跨境投资预扣税要注意什么",
+    "expectedCategory": "tax",
+    "expectedAnyKeyword": ["预扣税", "跨境投资", "税收协定"]
+  },
+  {
+    "query": "基金分红是不是一定赚钱以及税务怎么看",
+    "expectedCategory": "tax",
+    "expectedAnyKeyword": ["基金分红", "税务", "投资收入"]
+  },
+  {
+    "query": "家庭资产配置为什么要再平衡",
+    "expectedCategory": "asset_allocation",
+    "expectedAnyKeyword": ["再平衡", "资产配置", "分散化"]
+  },
+  {
+    "query": "战略资产配置和战术资产配置有什么区别",
+    "expectedCategory": "asset_allocation",
+    "expectedAnyKeyword": ["战略资产配置", "战术资产配置", "长期"]
+  },
+  {
+    "query": "应急备用金应该放在哪里",
+    "expectedCategory": "asset_allocation",
+    "expectedAnyKeyword": ["应急备用金", "现金", "流动性"]
+  },
+  {
+    "query": "股票债券现金黄金在组合里分别起什么作用",
+    "expectedCategory": "asset_allocation",
+    "expectedAnyKeyword": ["股票", "债券", "黄金"]
+  },
+  {
+    "query": "风险承受能力如何影响资产配置",
+    "expectedCategory": "asset_allocation",
+    "expectedAnyKeyword": ["风险承受能力", "投资目标", "期限"]
+  },
+  {
+    "query": "最大回撤和VaR分别怎么看",
+    "expectedCategory": "risk_management",
+    "expectedAnyKeyword": ["最大回撤", "VaR", "压力测试"]
+  },
+  {
+    "query": "流动性风险为什么重要",
+    "expectedCategory": "risk_management",
+    "expectedAnyKeyword": ["流动性风险", "合理价格", "变现"]
+  },
+  {
+    "query": "夏普比率能说明什么",
+    "expectedCategory": "risk_management",
+    "expectedAnyKeyword": ["夏普比率", "风险调整", "波动"]
+  },
+  {
+    "query": "集中度风险如何控制",
+    "expectedCategory": "risk_management",
+    "expectedAnyKeyword": ["集中度风险", "分散", "行业"]
+  },
+  {
+    "query": "风险预算和风险平价是什么意思",
+    "expectedCategory": "risk_management",
+    "expectedAnyKeyword": ["风险预算", "风险平价", "组合"]
+  },
+  {
+    "query": "场外配资有什么合规风险",
+    "expectedCategory": "regulation",
+    "expectedAnyKeyword": ["场外配资", "合规", "风险揭示"]
+  },
+  {
+    "query": "非法集资通常有哪些特征",
+    "expectedCategory": "regulation",
+    "expectedAnyKeyword": ["非法集资", "社会公众", "还本付息"]
+  },
+  {
+    "query": "投资者适当性是什么意思",
+    "expectedCategory": "regulation",
+    "expectedAnyKeyword": ["适当性", "风险承受能力", "投资者"]
+  },
+  {
+    "query": "内幕交易和操纵市场为什么违法",
+    "expectedCategory": "regulation",
+    "expectedAnyKeyword": ["内幕交易", "操纵市场", "违法"]
+  },
+  {
+    "query": "保本高收益的理财承诺为什么要警惕",
+    "expectedCategory": "regulation",
+    "expectedAnyKeyword": ["保本高收益", "风险揭示", "持牌机构"]
+  }
+]

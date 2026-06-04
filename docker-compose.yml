@@ -1,0 +1,116 @@
+services:
+  postgres:
+    image: public.ecr.aws/supabase/postgres:15.8.1.044
+    container_name: ai-agent-postgres
+    environment:
+      POSTGRES_DB: aiagent
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - ai-agent-postgres-data:/var/lib/postgresql/data
+      - ./deploy/postgres/init-pgvector.sql:/docker-entrypoint-initdb.d/01-init-pgvector.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d aiagent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: ai-agent-redis
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD}"]
+    volumes:
+      - ai-agent-redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-agent-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://postgres:5432/aiagent}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+      SPRING_AI_DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+      DASHSCOPE_MODEL: ${DASHSCOPE_MODEL:-qwen-long}
+      APP_API_KEY: ${APP_API_KEY:?set APP_API_KEY}
+      APP_AUTH_JWT_SECRET: ${APP_AUTH_JWT_SECRET:?set APP_AUTH_JWT_SECRET}
+      APP_AUTH_SMS_CODE_SECRET: ${APP_AUTH_SMS_CODE_SECRET:?set APP_AUTH_SMS_CODE_SECRET}
+      APP_AUTH_SMS_CODE_STORE: ${APP_AUTH_SMS_CODE_STORE:-redis}
+      APP_GUEST_QUOTA_STORE: ${APP_GUEST_QUOTA_STORE:-redis}
+      APP_RATE_LIMIT_ENABLED: ${APP_RATE_LIMIT_ENABLED:-true}
+      APP_RATE_LIMIT_STORE: ${APP_RATE_LIMIT_STORE:-redis}
+      APP_AI_QUEUE_ENABLED: ${APP_AI_QUEUE_ENABLED:-true}
+      APP_AI_QUEUE_WORKER_THREADS: ${APP_AI_QUEUE_WORKER_THREADS:-8}
+      APP_AI_QUEUE_CAPACITY: ${APP_AI_QUEUE_CAPACITY:-200}
+      APP_AI_MAX_CONCURRENT_REQUESTS: ${APP_AI_MAX_CONCURRENT_REQUESTS:-20}
+      APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:?set APP_CORS_ALLOWED_ORIGINS}
+      APP_AUTH_SMS_PROVIDER: ${APP_AUTH_SMS_PROVIDER:-http}
+      APP_AUTH_SMS_HTTP_ENDPOINT: ${APP_AUTH_SMS_HTTP_ENDPOINT:?set APP_AUTH_SMS_HTTP_ENDPOINT}
+      APP_AUTH_SMS_HTTP_SECRET: ${APP_AUTH_SMS_HTTP_SECRET:?set APP_AUTH_SMS_HTTP_SECRET}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+      EXA_API_KEY: ${EXA_API_KEY:-}
+      SEARCH_API_KEY: ${SEARCH_API_KEY:-}
+      APP_STORAGE_PROVIDER: ${APP_STORAGE_PROVIDER:-local}
+      APP_RAG_VECTOR_STORE: ${APP_RAG_VECTOR_STORE:-pgvector}
+      APP_RAG_INDEX_ON_STARTUP: ${APP_RAG_INDEX_ON_STARTUP:-true}
+      APP_RAG_PDF_ENABLED: ${APP_RAG_PDF_ENABLED:-true}
+    volumes:
+      - ./tmp:/app/tmp
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8123}:8123"
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: ai-agent-prometheus
+    depends_on:
+      - backend
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ai-agent-prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-6543}:9090"
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: ai-agent-grafana
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD}
+    volumes:
+      - ai-agent-grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-7654}:3000"
+
+  nginx:
+    build:
+      context: ./ai-agent-frontend
+      dockerfile: Dockerfile
+    container_name: ai-agent-nginx
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_BIND:-127.0.0.1}:${FRONTEND_PORT:-3000}:80"
+
+volumes:
+  ai-agent-postgres-data:
+  ai-agent-redis-data:
+  ai-agent-prometheus-data:
+  ai-agent-grafana-data:
