@@ -66,6 +66,7 @@ APP_AUTH_SMS_HTTP_SECRET=replace-with-sms-secret
 
 DASHSCOPE_API_KEY=replace-with-your-dashscope-key
 DASHSCOPE_MODEL=qwen-long
+DASHSCOPE_MODEL_BACKUPS=qwen3.7-plus,qwen3.7-max,qwen3.6-plus,qwen3.6-flash,deepseek-v4-pro
 EXA_API_KEY=replace-with-your-exa-key
 SEARCH_API_KEY=replace-with-your-search-key
 
@@ -82,6 +83,19 @@ GRAFANA_PORT=7654
 ```
 
 注意：不要提交真实 `.env`。生产环境必须轮换并使用真实强密钥。
+
+当前账号已实测可用的 DashScope 文本模型：
+
+```text
+qwen-long
+qwen3.7-plus
+qwen3.7-max
+qwen3.6-plus
+qwen3.6-flash
+deepseek-v4-pro
+```
+
+`qwen-plus`、`qwen-max` 在当前账号下返回 403，未放入备用列表。
 
 ## Docker Compose 部署
 
