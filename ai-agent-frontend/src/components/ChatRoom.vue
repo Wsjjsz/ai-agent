@@ -311,6 +311,21 @@
                 <!-- Final result -->
                 <Transition name="trace-expand">
                   <div v-if="msg.trace?.finalResultMarkdown" class="trace-result">
+                    <button
+                      class="message-action-btn trace-copy-btn"
+                      type="button"
+                      :aria-label="isCopied(actionKey(msg, 'trace-copy')) ? '已复制' : '复制推理结果'"
+                      :title="isCopied(actionKey(msg, 'trace-copy')) ? '已复制' : '复制全文'"
+                      @click="copyMessageText(displayFinalResultMarkdown(msg.trace), actionKey(msg, 'trace-copy'))"
+                    >
+                      <svg v-if="!isCopied(actionKey(msg, 'trace-copy'))" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7">
+                        <rect x="7" y="5" width="9" height="11" rx="2"/>
+                        <path d="M4 13V6a2 2 0 0 1 2-2h7"/>
+                      </svg>
+                      <svg v-else viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <path d="m4.5 10.5 3.4 3.4 7.6-8.1" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </button>
                     <div class="trace-result-label">
                       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M12 3l1.3 4.7L18 9l-4.7 1.3L12 15l-1.3-4.7L6 9l4.7-1.3z" stroke-linejoin="round"/>
@@ -349,6 +364,21 @@
             </div>
             <div class="bubble-col ai-bubble-col">
               <div class="bubble ai-bubble">
+                <button
+                  class="message-action-btn bubble-copy-btn"
+                  type="button"
+                  :aria-label="isCopied(actionKey(msg, 'ai-copy')) ? '已复制' : '复制回复'"
+                  :title="isCopied(actionKey(msg, 'ai-copy')) ? '已复制' : '复制全文'"
+                  @click="copyMessageText(msg.content, actionKey(msg, 'ai-copy'))"
+                >
+                  <svg v-if="!isCopied(actionKey(msg, 'ai-copy'))" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="7" y="5" width="9" height="11" rx="2"/>
+                    <path d="M4 13V6a2 2 0 0 1 2-2h7"/>
+                  </svg>
+                  <svg v-else viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <path d="m4.5 10.5 3.4 3.4 7.6-8.1" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
                 <div class="bubble-text" v-html="withCursor(renderMarkdown(msg.content), connectionStatus === 'connecting' && index === messages.length - 1)"></div>
                 <div class="bubble-time">{{ formatTime(msg.time) }}</div>
               </div>
@@ -366,9 +396,40 @@
               />
             </div>
             <div class="bubble-col user-bubble-col">
-              <div class="bubble user-bubble">
-                <div class="bubble-text">{{ msg.content }}</div>
-                <div class="bubble-time">{{ formatTime(msg.time) }}</div>
+              <div class="user-message-stack">
+                <div class="bubble user-bubble">
+                  <div class="bubble-text">{{ msg.content }}</div>
+                  <div class="bubble-time">{{ formatTime(msg.time) }}</div>
+                </div>
+                <div class="message-actions user-message-actions">
+                  <button
+                    class="message-action-btn"
+                    type="button"
+                    :aria-label="isCopied(actionKey(msg, 'user-copy')) ? '已复制' : '复制消息'"
+                    :title="isCopied(actionKey(msg, 'user-copy')) ? '已复制' : '复制'"
+                    @click="copyMessageText(msg.content, actionKey(msg, 'user-copy'))"
+                  >
+                    <svg v-if="!isCopied(actionKey(msg, 'user-copy'))" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7">
+                      <rect x="7" y="5" width="9" height="11" rx="2"/>
+                      <path d="M4 13V6a2 2 0 0 1 2-2h7"/>
+                    </svg>
+                    <svg v-else viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8">
+                      <path d="m4.5 10.5 3.4 3.4 7.6-8.1" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                  <button
+                    class="message-action-btn"
+                    type="button"
+                    aria-label="编辑消息"
+                    title="编辑"
+                    @click="editUserMessage(msg.content)"
+                  >
+                    <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7">
+                      <path d="M11.8 4.2 15.8 8 8 15.8l-4.2.5.6-4.1 7.4-8Z" stroke-linejoin="round"/>
+                      <path d="m10.5 5.6 3.9 3.8" stroke-linecap="round"/>
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
           </template>
@@ -473,6 +534,7 @@ const markdownPreviewLoading = ref(false)
 const markdownPreviewError = ref('')
 const signedPreviewUrls = ref({})
 const signingPreviewPaths = new Set()
+const copiedActionKey = ref('')
 const isMarkdownPreview = computed(() => /\.md$/i.test(previewFile.value?.path || ''))
 
 const inputPlaceholder = computed(() => {
@@ -483,6 +545,47 @@ const sendMessage = () => {
   if (!inputMessage.value.trim()) return
   emit('send-message', inputMessage.value)
   inputMessage.value = ''
+}
+
+const actionKey = (msg, action) => `${msg?.id || msg?.time || String(msg?.content || '').slice(0, 24) || 'message'}-${action}`
+
+const isCopied = (key) => copiedActionKey.value === key
+
+const copyMessageText = async (text, key) => {
+  const value = String(text || '').trim()
+  if (!value) return
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value)
+    } else {
+      const textarea = document.createElement('textarea')
+      textarea.value = value
+      textarea.setAttribute('readonly', '')
+      textarea.style.position = 'fixed'
+      textarea.style.left = '-9999px'
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+    }
+    copiedActionKey.value = key
+    window.setTimeout(() => {
+      if (copiedActionKey.value === key) copiedActionKey.value = ''
+    }, 1200)
+  } catch (error) {
+    console.warn('复制失败', error)
+  }
+}
+
+const editUserMessage = (content) => {
+  inputMessage.value = String(content || '')
+  nextTick(() => {
+    const textarea = document.querySelector('.input-field')
+    textarea?.focus()
+    if (typeof textarea?.setSelectionRange === 'function') {
+      textarea.setSelectionRange(inputMessage.value.length, inputMessage.value.length)
+    }
+  })
 }
 
 const formatTime = (timestamp) => {
@@ -1064,6 +1167,13 @@ onMounted(() => { scrollToBottom() })
   justify-content: flex-end;
 }
 
+.user-message-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
 /* ── Bubbles ── */
 .bubble {
   padding: 12px 16px;
@@ -1078,6 +1188,7 @@ onMounted(() => { scrollToBottom() })
   color: var(--text-main);
   border-bottom-left-radius: 4px;
   max-width: 100%;
+  padding-right: 42px;
 }
 
 .user-bubble {
@@ -1242,6 +1353,52 @@ onMounted(() => { scrollToBottom() })
 
 .user-bubble .bubble-time {
   color: #6b7280;
+}
+
+.message-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.user-message-actions {
+  padding-right: 6px;
+}
+
+.message-action-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #8a8497;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, transform 0.15s, opacity 0.15s;
+}
+
+.message-action-btn:hover {
+  background: #f5f3ff;
+  color: var(--brand);
+}
+
+.message-action-btn:active {
+  transform: translateY(1px);
+}
+
+.bubble-copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  opacity: 0.62;
+}
+
+.ai-bubble:hover .bubble-copy-btn,
+.bubble-copy-btn:focus-visible {
+  opacity: 1;
 }
 
 .cursor {
@@ -2283,8 +2440,15 @@ onMounted(() => { scrollToBottom() })
 /* ── Final Result ── */
 .trace-result {
   border-top: 1px solid var(--line-soft);
-  padding: 18px;
+  padding: 18px 48px 18px 18px;
   background: linear-gradient(180deg, #faf9ff 0%, var(--bg-surface) 40%);
+  position: relative;
+}
+
+.trace-copy-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
 }
 
 .trace-result-label {
