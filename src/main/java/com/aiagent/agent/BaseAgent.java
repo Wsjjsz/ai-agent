@@ -17,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -32,6 +33,10 @@ import java.util.function.Consumer;
 @Data
 @Slf4j
 public abstract class BaseAgent {
+
+    private static final ZoneId REPORT_ZONE = ZoneId.of("Asia/Shanghai");
+    private static final DateTimeFormatter REPORT_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final DateTimeFormatter FILE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss_SSS");
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -333,7 +338,7 @@ public abstract class BaseAgent {
 
     private String buildFinalSummaryMarkdown(String userPrompt, String finalSummary, List<String> results) {
         String safePrompt = StrUtil.blankToDefault(userPrompt, "（无）").trim();
-        String safeSummary = StrUtil.blankToDefault(finalSummary, "未生成明确总结，以下为执行过程摘要。").trim();
+        String safeSummary = StrUtil.blankToDefault(finalSummary, "未生成明确总结。").trim();
 
         StringBuilder sb = new StringBuilder();
         sb.append("# 智能体整理结果\n\n");
@@ -342,23 +347,8 @@ public abstract class BaseAgent {
         sb.append("## 最终总结\n");
         sb.append(safeSummary).append("\n\n");
 
-        if (results != null && !results.isEmpty()) {
-            sb.append("## 执行轨迹摘要\n");
-            for (String step : results) {
-                if (StrUtil.isBlank(step)) {
-                    continue;
-                }
-                String cleaned = step.trim();
-                if (cleaned.length() > 300) {
-                    cleaned = cleaned.substring(0, 300) + "...";
-                }
-                sb.append("- ").append(cleaned).append("\n");
-            }
-            sb.append("\n");
-        }
-
         sb.append("## 生成时间\n");
-        sb.append(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))).append("\n");
+        sb.append(LocalDateTime.now(REPORT_ZONE).format(REPORT_TIME_FORMATTER)).append("\n");
         return sb.toString();
     }
 
@@ -369,7 +359,7 @@ public abstract class BaseAgent {
         try {
             Path dir = GeneratedFileContext.baseDir().resolve("file");
             Files.createDirectories(dir);
-            String filename = "manus_summary_" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss_SSS")) + ".md";
+            String filename = "manus_summary_" + LocalDateTime.now(REPORT_ZONE).format(FILE_TIME_FORMATTER) + ".md";
             Path target = dir.resolve(filename);
             Files.writeString(target, markdownContent, StandardCharsets.UTF_8);
             log.info("Persisted manus summary markdown: {}", target);

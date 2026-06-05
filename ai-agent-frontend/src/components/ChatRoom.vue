@@ -1221,6 +1221,17 @@ onMounted(() => { scrollToBottom() })
   background: var(--bg-surface-soft);
 }
 
+.ai-bubble .bubble-text :deep(img) {
+  display: block;
+  max-width: min(100%, 520px);
+  max-height: 320px;
+  object-fit: contain;
+  margin: 12px 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
 .bubble-time {
   font-size: 0.7rem;
   opacity: 0.45;
@@ -2355,6 +2366,17 @@ onMounted(() => { scrollToBottom() })
   background: #f5f3ff;
   font-weight: 600;
   color: var(--text-strong);
+}
+
+.trace-result-body :deep(img) {
+  display: block;
+  max-width: min(100%, 560px);
+  max-height: 340px;
+  object-fit: contain;
+  margin: 12px 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: #f8fafc;
 }
 
 .trace-artifact-panel {

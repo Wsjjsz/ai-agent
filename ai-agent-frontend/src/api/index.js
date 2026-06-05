@@ -255,6 +255,11 @@ export const uploadAvatar = async (file) => {
   return resp.data
 }
 
+export const getRandomAvatars = async (count = 6, refresh = false) => {
+  const resp = await request.get('/auth/avatar/random', { params: { count, refresh } })
+  return resp.data
+}
+
 export const setPassword = async (password) => {
   const resp = await request.post('/auth/password', { password })
   return resp.data
@@ -319,6 +324,7 @@ export default {
   getCurrentUser,
   updateProfile,
   uploadAvatar,
+  getRandomAvatars,
   setPassword,
   setAuthStorage,
   clearAuthStorage,

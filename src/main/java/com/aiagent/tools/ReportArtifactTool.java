@@ -26,15 +26,23 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -52,15 +60,23 @@ import java.util.zip.ZipOutputStream;
 public class ReportArtifactTool {
 
     private static final Pattern BOLD_PATTERN = Pattern.compile("\\*\\*(.+?)\\*\\*");
+    private static final ZoneId REPORT_ZONE = ZoneId.of("Asia/Shanghai");
+    private static final DateTimeFormatter REPORT_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final int MAX_REPORT_IMAGE_BYTES = 5 * 1024 * 1024;
+    private static final HttpClient IMAGE_HTTP_CLIENT = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .followRedirects(HttpClient.Redirect.NEVER)
+            .build();
 
-    @Tool(description = "Generate final report artifacts from summary, sections, charts, and references. Outputs only Markdown, PDF, HTML preview, and Word DOCX.", returnDirect = false)
+    @Tool(description = "Generate downloadable final-answer report artifacts from a final summary, expanded analysis sections, tables, charts, relevant images, and references. The summary must be the user's final answer/core conclusion, not reasoning steps, tool logs, file paths, or generation notices. sectionsJson must expand that final answer with richer analysis. If searchImages was called earlier and returned images, pass 2-4 directly relevant items in imagesJson, preferably using localPath, so Markdown, HTML, PDF, and Word render actual images instead of plain URLs. If imagesJson is empty, this tool will try to reuse a small number of images downloaded in the current session. Outputs only Markdown, PDF, HTML preview, and Word DOCX.", returnDirect = false)
     public String generateReportArtifacts(
             @ToolParam(description = "Base file name without path, for example: ai-market-report") String fileName,
             @ToolParam(description = "Report title") String title,
-            @ToolParam(description = "Executive summary in Markdown or plain text") String summary,
-            @ToolParam(description = "JSON array of sections: [{\"title\":\"...\",\"content\":\"...\"}]") String sectionsJson,
-            @ToolParam(description = "JSON array of table rows, or object with rows field") String tablesJson,
+            @ToolParam(description = "Final answer/core conclusion in Markdown or plain text. For formal reports, write 200-400 Chinese characters with conclusion, opportunity, suitable users, and key risks. Do not include reasoning process, tool call logs, file generation notices, or download paths.") String summary,
+            @ToolParam(description = "JSON array of expanded report sections: [{\"title\":\"...\",\"content\":\"...\"}]. For formal reports, include at least 6 sections and make each section substantive, usually 300-600 Chinese characters. These sections must expand the final answer, not describe execution steps or tool usage.") String sectionsJson,
+            @ToolParam(description = "JSON array of table rows, or object with rows field. Use this for real comparisons, allocation plans, risk matrices, timelines, or product/asset comparisons.") String tablesJson,
             @ToolParam(description = "JSON array of chart artifacts: [{\"title\":\"...\",\"path\":\"...\",\"previewPath\":\"...\",\"insight\":\"...\"}]") String chartsJson,
+            @ToolParam(description = "JSON array of report images from searchImages: [{\"title\":\"...\",\"localPath\":\"/tmp/...jpg\",\"image\":\"https://...\",\"thumbnail\":\"https://...\",\"description\":\"...\",\"source\":\"...\"}]. If searchImages returned localPath, include it. For visually meaningful reports, pass 2-4 highly relevant images that explain the topic. Use [] only when no relevant image is needed or image search failed.") String imagesJson,
             @ToolParam(description = "JSON array of references: [{\"title\":\"...\",\"link\":\"...\"}]") String referencesJson) {
         try {
             String baseName = normalizeBaseName(fileName);
@@ -77,6 +93,10 @@ public class ReportArtifactTool {
             JSONArray sections = parseArray(sectionsJson);
             JSONArray rows = parseRows(tablesJson);
             JSONArray charts = parseArray(chartsJson);
+            JSONArray images = parseArray(imagesJson);
+            if (images.isEmpty()) {
+                images = discoverSessionImages();
+            }
             JSONArray references = parseArray(referencesJson);
 
             JSONObject payload = JSONUtil.createObj();
@@ -85,8 +105,9 @@ public class ReportArtifactTool {
             payload.set("sections", sections);
             payload.set("tables", rows);
             payload.set("charts", charts);
+            payload.set("images", images);
             payload.set("references", references);
-            payload.set("generatedAt", LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+            payload.set("generatedAt", LocalDateTime.now(REPORT_ZONE).format(REPORT_TIME_FORMATTER));
 
             FileUtil.writeString(buildMarkdown(payload), mdPath.toFile(), StandardCharsets.UTF_8);
             FileUtil.writeString(buildHtml(payload), htmlPath.toFile(), StandardCharsets.UTF_8);
@@ -123,12 +144,16 @@ public class ReportArtifactTool {
         StringBuilder md = new StringBuilder();
         md.append("# ").append(payload.getStr("title", "智能体研究报告")).append("\n\n");
         md.append("> 生成时间：").append(payload.getStr("generatedAt", "")).append("\n\n");
-        md.append("## 摘要\n\n").append(defaultIfBlank(payload.getStr("summary", ""), "暂无摘要。")).append("\n\n");
+        md.append("## 最终总结\n\n").append(defaultIfBlank(payload.getStr("summary", ""), "暂无最终总结。")).append("\n\n");
+        appendMarkdownImages(md, payload.getJSONArray("images"));
 
         JSONArray sections = payload.getJSONArray("sections");
+        if (sections != null && !sections.isEmpty()) {
+            md.append("## 扩展分析\n\n");
+        }
         for (int i = 0; sections != null && i < sections.size(); i++) {
             JSONObject section = toObject(sections.get(i), "章节 " + (i + 1));
-            md.append("## ").append(section.getStr("title", "章节 " + (i + 1))).append("\n\n")
+            md.append("### ").append(section.getStr("title", "章节 " + (i + 1))).append("\n\n")
                     .append(section.getStr("content", "")).append("\n\n");
         }
 
@@ -186,6 +211,7 @@ public class ReportArtifactTool {
                     section{padding:30px 52px;border-bottom:1px solid #e5e7eb;}
                     .summary{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;line-height:1.75;white-space:pre-wrap}
                     .section-text{line-height:1.8;white-space:pre-wrap}.chart{margin:18px 0}.chart img{width:100%;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc}
+                    .image-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}.report-image{margin:0}.report-image img{width:100%;max-height:260px;object-fit:cover;border:1px solid #e2e8f0;background:#f8fafc}.report-image figcaption{font-size:13px;color:#475569;margin-top:8px;line-height:1.5}
                     table{width:100%;border-collapse:collapse}th,td{border:1px solid #e2e8f0;padding:10px;text-align:left;font-size:13px}th{background:#eef2ff;color:#3730a3}
                     a{color:#2563eb}.muted{color:#64748b;font-size:12px}
                   </style>
@@ -193,10 +219,14 @@ public class ReportArtifactTool {
                 """);
         html.append("<header><h1>").append(escape(payload.getStr("title", "智能体研究报告"))).append("</h1><p>")
                 .append(escape(payload.getStr("generatedAt", ""))).append("</p></header>");
-        html.append("<section><h2>摘要</h2><div class=\"summary\">")
-                .append(markdownToHtml(defaultIfBlank(payload.getStr("summary", ""), "暂无摘要。"))).append("</div></section>");
+        html.append("<section><h2>最终总结</h2><div class=\"summary\">")
+                .append(markdownToHtml(defaultIfBlank(payload.getStr("summary", ""), "暂无最终总结。"))).append("</div></section>");
+        appendHtmlImages(html, payload.getJSONArray("images"));
 
         JSONArray sections = payload.getJSONArray("sections");
+        if (sections != null && !sections.isEmpty()) {
+            html.append("<section><h2>扩展分析</h2><p class=\"muted\">以下内容基于最终总结展开，补充背景、策略、风险和执行建议。</p></section>");
+        }
         for (int i = 0; sections != null && i < sections.size(); i++) {
             JSONObject section = toObject(sections.get(i), "章节 " + (i + 1));
             html.append("<section><h2>").append(escape(section.getStr("title", "章节 " + (i + 1))))
@@ -278,13 +308,17 @@ public class ReportArtifactTool {
                     .setTextAlignment(TextAlignment.CENTER)
                     .setMarginBottom(28));
 
-            addPdfHeading(document, "摘要", 1);
-            addMarkdownToPdf(document, defaultIfBlank(payload.getStr("summary", ""), "暂无摘要。"));
+            addPdfHeading(document, "最终总结", 1);
+            addMarkdownToPdf(document, defaultIfBlank(payload.getStr("summary", ""), "暂无最终总结。"));
+            addPdfReportImages(document, pdf, payload.getJSONArray("images"));
 
             JSONArray sections = payload.getJSONArray("sections");
+            if (sections != null && !sections.isEmpty()) {
+                addPdfHeading(document, "扩展分析", 1);
+            }
             for (int i = 0; sections != null && i < sections.size(); i++) {
                 JSONObject section = toObject(sections.get(i), "章节 " + (i + 1));
-                addPdfHeading(document, section.getStr("title", "章节 " + (i + 1)), 1);
+                addPdfHeading(document, section.getStr("title", "章节 " + (i + 1)), 2);
                 addMarkdownToPdf(document, section.getStr("content", ""));
             }
 
@@ -325,13 +359,17 @@ public class ReportArtifactTool {
         StringBuilder body = docx.body;
         body.append(docxHeading(payload.getStr("title", "智能体研究报告"), 1));
         body.append(docxParagraph("生成时间：" + payload.getStr("generatedAt", "")));
-        body.append(docxHeading("摘要", 2));
-        appendDocxMarkdown(body, defaultIfBlank(payload.getStr("summary", ""), "暂无摘要。"));
+        body.append(docxHeading("最终总结", 2));
+        appendDocxMarkdown(body, defaultIfBlank(payload.getStr("summary", ""), "暂无最终总结。"));
+        appendDocxReportImages(docx, payload.getJSONArray("images"));
 
         JSONArray sections = payload.getJSONArray("sections");
+        if (sections != null && !sections.isEmpty()) {
+            body.append(docxHeading("扩展分析", 2));
+        }
         for (int i = 0; sections != null && i < sections.size(); i++) {
             JSONObject section = toObject(sections.get(i), "章节 " + (i + 1));
-            body.append(docxHeading(section.getStr("title", "章节 " + (i + 1)), 2));
+            body.append(docxHeading(section.getStr("title", "章节 " + (i + 1)), 3));
             appendDocxMarkdown(body, section.getStr("content", ""));
         }
 
@@ -371,6 +409,7 @@ public class ReportArtifactTool {
                   <Default Extension="png" ContentType="image/png"/>
                   <Default Extension="jpg" ContentType="image/jpeg"/>
                   <Default Extension="jpeg" ContentType="image/jpeg"/>
+                  <Default Extension="gif" ContentType="image/gif"/>
                   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
                   <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
                 </Types>
@@ -442,8 +481,20 @@ public class ReportArtifactTool {
             return "";
         }
         String trimmed = imagePath.trim();
-        if (trimmed.startsWith("data:") || isHttpUrl(trimmed)) {
+        if (trimmed.startsWith("data:")) {
             return trimmed;
+        }
+        if (isHttpUrl(trimmed)) {
+            try {
+                ImageResource resource = resolveImageResource(trimmed);
+                if (resource == null || resource.bytes().length == 0) {
+                    return "";
+                }
+                String mime = imageMimeTypeFromExtension(resource.extension());
+                return "data:" + mime + ";base64," + Base64.getEncoder().encodeToString(resource.bytes());
+            } catch (Exception ignored) {
+                return "";
+            }
         }
         try {
             Path path = Paths.get(trimmed).toAbsolutePath().normalize();
@@ -467,7 +518,7 @@ public class ReportArtifactTool {
             return trimmed;
         }
         if (isHttpUrl(trimmed)) {
-            return UrlSafety.isSafeHttpUrl(trimmed) ? trimmed : "";
+            return markdownImageUri(trimmed);
         }
         String embedded = markdownImageUri(trimmed);
         return embedded.startsWith("data:") ? embedded : "";
@@ -478,6 +529,162 @@ public class ReportArtifactTool {
                 .replace("\\", "\\\\")
                 .replace("[", "\\[")
                 .replace("]", "\\]");
+    }
+
+    private void appendMarkdownImages(StringBuilder md, JSONArray images) {
+        JSONArray normalized = normalizeImages(images);
+        if (normalized.isEmpty()) {
+            return;
+        }
+        md.append("## 相关图片\n\n");
+        for (int i = 0; i < normalized.size(); i++) {
+            JSONObject image = normalized.getJSONObject(i);
+            String title = image.getStr("title", "相关图片 " + (i + 1));
+            String imageUrl = image.getStr("image", "");
+            String imageUri = markdownImageUri(imageUrl);
+            if (StrUtil.isBlank(imageUri)) {
+                continue;
+            }
+            md.append("### ").append(title).append("\n\n");
+            md.append("![").append(escapeMarkdownAlt(title)).append("](").append(imageUri).append(")\n\n");
+            String description = firstNonBlank(image.getStr("description", ""), image.getStr("source", ""));
+            if (StrUtil.isNotBlank(description)) {
+                md.append(description).append("\n\n");
+            }
+        }
+    }
+
+    private void appendHtmlImages(StringBuilder html, JSONArray images) {
+        JSONArray normalized = normalizeImages(images);
+        if (normalized.isEmpty()) {
+            return;
+        }
+        html.append("<section><h2>相关图片</h2><div class=\"image-grid\">");
+        for (int i = 0; i < normalized.size(); i++) {
+            JSONObject image = normalized.getJSONObject(i);
+            String title = image.getStr("title", "相关图片 " + (i + 1));
+            String imageSrc = htmlImageSrc(image.getStr("image", ""));
+            if (StrUtil.isBlank(imageSrc)) {
+                continue;
+            }
+            html.append("<figure class=\"report-image\"><img src=\"").append(escapeAttr(imageSrc))
+                    .append("\" alt=\"").append(escapeAttr(title)).append("\"><figcaption>")
+                    .append(escape(title));
+            String description = firstNonBlank(image.getStr("description", ""), image.getStr("source", ""));
+            if (StrUtil.isNotBlank(description)) {
+                html.append("<br>").append(escape(description));
+            }
+            html.append("</figcaption></figure>");
+        }
+        html.append("</div></section>");
+    }
+
+    private void addPdfReportImages(Document document, PdfDocument pdf, JSONArray images) {
+        JSONArray normalized = normalizeImages(images);
+        if (normalized.isEmpty()) {
+            return;
+        }
+        addPdfHeading(document, "相关图片", 1);
+        for (int i = 0; i < normalized.size(); i++) {
+            JSONObject image = normalized.getJSONObject(i);
+            String title = image.getStr("title", "相关图片 " + (i + 1));
+            addPdfHeading(document, title, 2);
+            addPdfImage(document, pdf, image.getStr("image", ""));
+            String description = firstNonBlank(image.getStr("description", ""), image.getStr("source", ""));
+            if (StrUtil.isNotBlank(description)) {
+                addMarkdownToPdf(document, description);
+            }
+        }
+    }
+
+    private void appendDocxReportImages(DocxContext docx, JSONArray images) {
+        JSONArray normalized = normalizeImages(images);
+        if (normalized.isEmpty()) {
+            return;
+        }
+        docx.body.append(docxHeading("相关图片", 2));
+        for (int i = 0; i < normalized.size(); i++) {
+            JSONObject image = normalized.getJSONObject(i);
+            String title = image.getStr("title", "相关图片 " + (i + 1));
+            docx.body.append(docxHeading(title, 3));
+            appendDocxImage(docx, image.getStr("image", ""), title);
+            String description = firstNonBlank(image.getStr("description", ""), image.getStr("source", ""));
+            if (StrUtil.isNotBlank(description)) {
+                appendDocxMarkdown(docx.body, description);
+            }
+        }
+    }
+
+    private JSONArray normalizeImages(JSONArray images) {
+        JSONArray normalized = JSONUtil.createArray();
+        if (images == null || images.isEmpty()) {
+            return normalized;
+        }
+        for (int i = 0; i < images.size(); i++) {
+            JSONObject source = toObject(images.get(i), "相关图片 " + (i + 1));
+            String imageUrl = firstImageField(source,
+                    "localPath", "path", "imagePath", "image", "url", "link", "thumbnail", "thumb", "pic",
+                    "objURL", "objurl", "middleURL", "middleurl", "thumbURL", "thumburl");
+            if (StrUtil.isBlank(imageUrl)) {
+                continue;
+            }
+            JSONObject image = JSONUtil.createObj();
+            image.set("title", firstNonBlank(source.getStr("title", ""), "相关图片 " + (normalized.size() + 1)));
+            image.set("image", imageUrl);
+            image.set("thumbnail", firstNonBlank(source.getStr("thumbnail", ""), imageUrl));
+            image.set("description", firstNonBlank(source.getStr("description", ""), source.getStr("insight", "")));
+            image.set("source", source.getStr("source", ""));
+            normalized.add(image);
+        }
+        return normalized;
+    }
+
+    private JSONArray discoverSessionImages() {
+        JSONArray images = JSONUtil.createArray();
+        Path imageDir = GeneratedFileContext.baseDir().resolve("image").toAbsolutePath().normalize();
+        if (!Files.exists(imageDir) || !Files.isDirectory(imageDir)) {
+            return images;
+        }
+        try (var stream = Files.list(imageDir)) {
+            List<Path> paths = stream
+                    .filter(path -> Files.isRegularFile(path) && isSupportedImagePath(path.toString()))
+                    .sorted(Comparator.comparingLong(this::lastModifiedMillis).reversed())
+                    .limit(4)
+                    .toList();
+            for (int i = 0; i < paths.size(); i++) {
+                JSONObject image = JSONUtil.createObj();
+                image.set("title", "相关图片 " + (i + 1));
+                image.set("image", paths.get(i).toString());
+                image.set("localPath", paths.get(i).toString());
+                image.set("description", "智能体图片搜索结果");
+                image.set("source", "searchImages");
+                images.add(image);
+            }
+        } catch (Exception e) {
+            log.debug("Failed to discover session images for report", e);
+        }
+        return images;
+    }
+
+    private long lastModifiedMillis(Path path) {
+        try {
+            return Files.getLastModifiedTime(path).toMillis();
+        } catch (Exception ignored) {
+            return 0L;
+        }
+    }
+
+    private String firstImageField(JSONObject source, String... keys) {
+        if (source == null) {
+            return "";
+        }
+        for (String key : keys) {
+            String value = source.getStr(key, "");
+            if (StrUtil.isNotBlank(value)) {
+                return value;
+            }
+        }
+        return "";
     }
 
     private String buildMarkdownTable(JSONArray rows) {
@@ -507,13 +714,27 @@ public class ReportArtifactTool {
     }
 
     private void addPdfChartImage(Document document, PdfDocument pdf, String imagePath) {
+        addPdfImage(document, pdf, imagePath);
+    }
+
+    private void addPdfImage(Document document, PdfDocument pdf, String imagePath) {
         if (StrUtil.isBlank(imagePath)) {
             return;
         }
         try {
             Image image;
             if (isHttpUrl(imagePath)) {
-                image = new Image(ImageDataFactory.create(UrlSafety.requireSafeHttpUrl(imagePath).toString()));
+                ImageResource imageResource = resolveImageResource(imagePath);
+                if (imageResource == null || imageResource.bytes().length == 0) {
+                    return;
+                }
+                if ("svg".equals(imageResource.extension())) {
+                    try (var input = new ByteArrayInputStream(imageResource.bytes())) {
+                        image = SvgConverter.convertToImage(input, pdf);
+                    }
+                } else {
+                    image = new Image(ImageDataFactory.create(imageResource.bytes()));
+                }
             } else {
                 Path path = Paths.get(imagePath).toAbsolutePath().normalize();
                 if (!Files.exists(path) || !Files.isRegularFile(path) || !isSupportedImagePath(path.toString())) {
@@ -531,7 +752,7 @@ public class ReportArtifactTool {
             image.setMarginBottom(10);
             document.add(image);
         } catch (Exception e) {
-            document.add(new Paragraph("图表暂无法嵌入。")
+            document.add(new Paragraph("图片暂无法嵌入。")
                     .setFontSize(9)
                     .setFontColor(new DeviceRgb(100, 116, 139)));
         }
@@ -562,26 +783,87 @@ public class ReportArtifactTool {
     }
 
     private void appendDocxImage(DocxContext docx, String imagePath, String altText) {
-        if (StrUtil.isBlank(imagePath) || isHttpUrl(imagePath)) {
+        if (StrUtil.isBlank(imagePath)) {
             return;
         }
         try {
-            Path path = Paths.get(imagePath).toAbsolutePath().normalize();
-            if (!Files.exists(path) || !Files.isRegularFile(path) || !isSupportedImagePath(path.toString())) {
+            ImageResource imageResource = resolveImageResource(imagePath);
+            if (imageResource == null || imageResource.bytes().length == 0) {
                 return;
             }
-            String extension = imageExtension(path.toString());
+            String extension = imageResource.extension();
             int imageId = docx.nextImageId++;
             String relId = "rIdImage" + imageId;
             String mediaName = "image" + imageId + "." + extension;
-            docx.mediaEntries.put("word/media/" + mediaName, Files.readAllBytes(path));
+            docx.mediaEntries.put("word/media/" + mediaName, imageResource.bytes());
             docx.imageRelationships.add("<Relationship Id=\"" + relId
                     + "\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/image\" Target=\"media/"
                     + mediaName + "\"/>");
             docx.body.append(docxImage(relId, mediaName, altText, imageId));
         } catch (Exception e) {
-            docx.body.append(docxParagraph("图表暂无法嵌入。"));
+            docx.body.append(docxParagraph("图片暂无法嵌入。"));
         }
+    }
+
+    private ImageResource resolveImageResource(String imagePath) throws Exception {
+        if (isHttpUrl(imagePath)) {
+            return downloadImageResource(imagePath);
+        }
+        Path path = Paths.get(imagePath).toAbsolutePath().normalize();
+        if (!Files.exists(path) || !Files.isRegularFile(path) || !isSupportedImagePath(path.toString())) {
+            return null;
+        }
+        return new ImageResource(Files.readAllBytes(path), imageExtension(path.toString()));
+    }
+
+    private ImageResource downloadImageResource(String imageUrl) throws Exception {
+        URI safeUri = UrlSafety.requireSafeHttpUrl(imageUrl);
+        HttpResponse<byte[]> response = sendImageRequestFollowingSafeRedirects(safeUri, 3);
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            return null;
+        }
+        byte[] bytes = response.body();
+        if (bytes == null || bytes.length == 0 || bytes.length > MAX_REPORT_IMAGE_BYTES) {
+            return null;
+        }
+        String contentType = response.headers().firstValue("content-type").orElse("");
+        String extension = imageExtensionFromContentType(contentType);
+        if (StrUtil.isBlank(extension)) {
+            extension = firstNonBlank(imageExtensionFromBytes(bytes), imageExtension(imageUrl));
+        }
+        if (StrUtil.isBlank(extension) || "webp".equals(extension)) {
+            return null;
+        }
+        return new ImageResource(bytes, extension);
+    }
+
+    private HttpResponse<byte[]> sendImageRequestFollowingSafeRedirects(URI startUri, int maxRedirects) throws Exception {
+        URI current = startUri;
+        for (int i = 0; i <= maxRedirects; i++) {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(current)
+                    .timeout(Duration.ofSeconds(15))
+                    .header("User-Agent", "Mozilla/5.0 (compatible; AI-Agent-Report/1.0)")
+                    .header("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+                    .GET()
+                    .build();
+            HttpResponse<byte[]> response = IMAGE_HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            if (!isRedirectStatus(response.statusCode())) {
+                return response;
+            }
+            String location = response.headers().firstValue("location").orElse("");
+            if (StrUtil.isBlank(location) || i == maxRedirects) {
+                return response;
+            }
+            URI next = current.resolve(location).normalize();
+            current = UrlSafety.requireSafeHttpUrl(next.toString());
+        }
+        throw new IllegalStateException("Image redirect limit exceeded");
+    }
+
+    private boolean isRedirectStatus(int statusCode) {
+        return statusCode == 301 || statusCode == 302 || statusCode == 303
+                || statusCode == 307 || statusCode == 308;
     }
 
     private String docxImage(String relId, String mediaName, String altText, int imageId) {
@@ -889,13 +1171,61 @@ public class ReportArtifactTool {
     }
 
     private String imageMimeType(String value) {
-        return switch (imageExtension(value)) {
+        return imageMimeTypeFromExtension(imageExtension(value));
+    }
+
+    private String imageMimeTypeFromExtension(String extension) {
+        return switch (defaultIfBlank(extension, "")) {
             case "svg" -> "image/svg+xml";
             case "png" -> "image/png";
             case "jpg", "jpeg" -> "image/jpeg";
             case "gif" -> "image/gif";
             default -> "application/octet-stream";
         };
+    }
+
+    private String imageExtensionFromContentType(String contentType) {
+        String normalized = defaultIfBlank(contentType, "").toLowerCase();
+        if (normalized.contains("image/png")) {
+            return "png";
+        }
+        if (normalized.contains("image/jpeg") || normalized.contains("image/jpg")) {
+            return "jpg";
+        }
+        if (normalized.contains("image/gif")) {
+            return "gif";
+        }
+        if (normalized.contains("image/svg")) {
+            return "svg";
+        }
+        if (normalized.contains("image/webp")) {
+            return "webp";
+        }
+        return "";
+    }
+
+    private String imageExtensionFromBytes(byte[] bytes) {
+        if (bytes == null || bytes.length < 12) {
+            return "";
+        }
+        if ((bytes[0] & 0xff) == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4e && bytes[3] == 0x47) {
+            return "png";
+        }
+        if ((bytes[0] & 0xff) == 0xff && (bytes[1] & 0xff) == 0xd8) {
+            return "jpg";
+        }
+        if (bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46) {
+            return "gif";
+        }
+        String prefix = new String(bytes, 0, Math.min(bytes.length, 200), StandardCharsets.UTF_8).trim().toLowerCase();
+        if (prefix.startsWith("<svg") || prefix.contains("<svg")) {
+            return "svg";
+        }
+        if (bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46
+                && bytes[8] == 0x57 && bytes[9] == 0x45 && bytes[10] == 0x42 && bytes[11] == 0x50) {
+            return "webp";
+        }
+        return "";
     }
 
     private String imageExtension(String value) {
@@ -1110,5 +1440,8 @@ public class ReportArtifactTool {
         private final Map<String, byte[]> mediaEntries = new LinkedHashMap<>();
         private final List<String> imageRelationships = new ArrayList<>();
         private int nextImageId = 1;
+    }
+
+    private record ImageResource(byte[] bytes, String extension) {
     }
 }

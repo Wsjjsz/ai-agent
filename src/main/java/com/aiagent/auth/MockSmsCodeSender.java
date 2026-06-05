@@ -10,8 +10,9 @@ import org.springframework.stereotype.Service;
 public class MockSmsCodeSender implements SmsCodeSender {
 
     @Override
-    public void sendLoginCode(String phone, String code) {
+    public String sendLoginCode(String phone, String code) {
         log.info("Mock SMS login code for {}: {}", maskPhone(phone), code);
+        return code;
     }
 
     private String maskPhone(String phone) {

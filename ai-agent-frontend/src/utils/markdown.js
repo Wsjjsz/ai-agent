@@ -36,10 +36,20 @@ const safeUrl = (url, { image = false } = {}) => {
   return ''
 }
 
+const normalizeMarkdownLinks = (text) => String(text || '')
+  .replace(/!\[([^\]]*)\]\(([\s\S]*?)\)/g, (_, alt, url) => {
+    const compactUrl = String(url || '').replace(/\s+/g, '')
+    return `![${alt}](${compactUrl})`
+  })
+  .replace(/(?<!!)\[([^\]]+)\]\(([\s\S]*?)\)/g, (_, label, url) => {
+    const compactUrl = String(url || '').replace(/\s+/g, '')
+    return `[${label}](${compactUrl})`
+  })
+
 export const renderMarkdown = (markdownText) => {
   if (!markdownText) return ''
   // 预处理：在编号列表和无序列表前插入换行
-  const preprocessed = markdownText
+  const preprocessed = normalizeMarkdownLinks(markdownText)
     // 匹配 "数字." 后跟中文或字母（排除小数、年份等）
     .replace(/(?<!\n)(\d+)\.(?=[^\d\s.])/g, '\n$1.')
     // 匹配列表项标记 "- "：前面是行首、冒号、句号等分隔符
@@ -61,12 +71,12 @@ export const renderMarkdown = (markdownText) => {
     .replace(/^###\s+(.*)$/gm, '<h3>$1</h3>')
     .replace(/^##\s+(.*)$/gm, '<h2>$1</h2>')
     .replace(/^#\s+(.*)$/gm, '<h1>$1</h1>')
-    .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_, alt, url) => {
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
       const src = safeUrl(url, { image: true })
       if (!src) return alt
       return `<img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}">`
     })
-    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, url) => {
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => {
       const href = safeUrl(url)
       if (!href) return label
       return `<a href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer">${label}</a>`

@@ -158,17 +158,25 @@
                     </label>
                     <small>支持 JPG、PNG、WebP、GIF，最大 2MB</small>
                   </div>
-                  <div class="avatar-presets" aria-label="系统头像">
+                  <div class="avatar-preset-head">
+                    <span>随机头像</span>
+                    <button type="button" @click="loadAvatarPresets(true)" :disabled="avatarPresetsLoading">
+                      {{ avatarPresetsLoading ? '加载中' : '换一批' }}
+                    </button>
+                  </div>
+                  <div class="avatar-presets" aria-label="随机头像">
+                    <div v-if="avatarPresetsLoading && !avatarPresets.length" class="avatar-preset-empty">正在获取随机头像...</div>
+                    <div v-else-if="!avatarPresets.length" class="avatar-preset-empty">暂无随机头像，可先上传头像</div>
                     <button
                       v-for="preset in avatarPresets"
                       :key="preset.id"
                       class="avatar-preset-btn"
-                      :class="{ active: profileForm.avatarUrl === `preset:${preset.id}` && !avatarFile }"
+                      :class="{ active: profileForm.avatarUrl === preset.url && !avatarFile }"
                       type="button"
-                      @click="selectPresetAvatar(preset.id)"
+                      @click="selectPresetAvatar(preset.url)"
                     >
                       <UserAvatarFallback
-                        :avatar-url="`preset:${preset.id}`"
+                        :avatar-url="preset.url"
                         :name="profileForm.nickname || authStore.displayName"
                         :seed="preset.id"
                       />
@@ -284,6 +292,26 @@
       <router-view />
     </main>
     <AuthModal />
+    <Transition name="profile-toast">
+      <div
+        v-if="profileToast.visible"
+        class="profile-toast"
+        :class="`is-${profileToast.type}`"
+        role="status"
+        aria-live="polite"
+      >
+        <span class="profile-toast-icon" aria-hidden="true">
+          <svg v-if="profileToast.type === 'success'" viewBox="0 0 20 20" fill="none">
+            <path d="M5 10.4 8.2 13.5 15 6.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          <svg v-else viewBox="0 0 20 20" fill="none">
+            <path d="M10 6.5v4.2M10 13.8h.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+            <circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.8" />
+          </svg>
+        </span>
+        <span>{{ profileToast.message }}</span>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -293,7 +321,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useSessionStore } from '@/stores/session'
 import { useChatStore } from '@/stores/chat'
 import { useAuthStore } from '@/stores/auth'
-import { uploadAvatar as apiUploadAvatar } from '@/api'
+import { uploadAvatar as apiUploadAvatar, getRandomAvatars as apiGetRandomAvatars } from '@/api'
 import UserAvatarFallback from '@/components/UserAvatarFallback.vue'
 import AuthModal from '@/components/AuthModal.vue'
 
@@ -310,17 +338,17 @@ const profileDialog = ref('')
 const profileError = ref('')
 const profileNotice = ref('')
 const profileFeedbackText = computed(() => profileError.value || profileNotice.value)
+const profileToast = reactive({
+  visible: false,
+  type: 'success',
+  message: ''
+})
+let profileToastTimer = null
 const avatarFile = ref(null)
 const avatarPreviewUrl = ref('')
 const avatarObjectUrl = ref('')
-const avatarPresets = [
-  { id: 'amethyst', name: '紫晶' },
-  { id: 'nebula', name: '星云' },
-  { id: 'emerald', name: '翠岭' },
-  { id: 'sunrise', name: '朝阳' },
-  { id: 'blossom', name: '樱粉' },
-  { id: 'graphite', name: '曜石' }
-]
+const avatarPresets = ref([])
+const avatarPresetsLoading = ref(false)
 const profileForm = reactive({
   nickname: '',
   avatarUrl: ''
@@ -545,6 +573,7 @@ const openProfileDialog = (type) => {
     profileForm.nickname = authStore.user?.nickname || authStore.displayName || ''
     profileForm.avatarUrl = authStore.user?.avatarUrl || ''
     avatarPreviewUrl.value = profileForm.avatarUrl
+    loadAvatarPresets(false)
   }
   if (type === 'password') {
     passwordForm.password = ''
@@ -562,11 +591,26 @@ const closeProfileDialog = () => {
   avatarPreviewUrl.value = ''
 }
 
+const showProfileToast = (message, type = 'success') => {
+  if (profileToastTimer) {
+    clearTimeout(profileToastTimer)
+    profileToastTimer = null
+  }
+  profileToast.message = message
+  profileToast.type = type
+  profileToast.visible = true
+  profileToastTimer = setTimeout(() => {
+    profileToast.visible = false
+    profileToastTimer = null
+  }, 2600)
+}
+
 const saveProfile = async () => {
   profileError.value = ''
   profileNotice.value = ''
   if (!profileForm.nickname.trim()) {
     profileError.value = '请输入昵称'
+    showProfileToast('请输入昵称后再保存', 'error')
     return
   }
   try {
@@ -576,17 +620,36 @@ const saveProfile = async () => {
       avatarUrl = uploadResult?.avatarUrl || avatarUrl
     }
     await authStore.updateProfile(profileForm.nickname.trim(), avatarUrl)
-    profileNotice.value = '资料已保存'
     closeProfileDialog()
+    showProfileToast('个人信息已保存', 'success')
   } catch (error) {
-    profileError.value = error?.response?.data?.error || error?.message || '保存失败，请稍后重试'
+    const message = error?.response?.data?.error || error?.message || '保存失败，请稍后重试'
+    profileError.value = message
+    showProfileToast(message, 'error')
   }
 }
 
-const selectPresetAvatar = (presetId) => {
+const loadAvatarPresets = async (force = false) => {
+  if (avatarPresetsLoading.value) return
+  if (!force && avatarPresets.value.length) return
+  avatarPresetsLoading.value = true
+  try {
+    const result = await apiGetRandomAvatars(6, force)
+    avatarPresets.value = Array.isArray(result?.avatars) ? result.avatars.filter(item => item?.url) : []
+  } catch (error) {
+    if (force) {
+      showProfileToast('随机头像获取失败，请稍后重试', 'error')
+    }
+  } finally {
+    avatarPresetsLoading.value = false
+  }
+}
+
+const selectPresetAvatar = (avatarUrl) => {
+  if (!avatarUrl) return
   cleanupAvatarPreview()
   avatarFile.value = null
-  profileForm.avatarUrl = `preset:${presetId}`
+  profileForm.avatarUrl = avatarUrl
   avatarPreviewUrl.value = profileForm.avatarUrl
 }
 
@@ -623,18 +686,22 @@ const savePassword = async () => {
   profileNotice.value = ''
   if (passwordForm.password.length < 6) {
     profileError.value = '密码至少 6 位'
+    showProfileToast('密码至少 6 位', 'error')
     return
   }
   if (passwordForm.password !== passwordForm.confirm) {
     profileError.value = '两次输入的密码不一致'
+    showProfileToast('两次输入的密码不一致', 'error')
     return
   }
   try {
     await authStore.setPassword(passwordForm.password)
-    profileNotice.value = '密码已设置'
     closeProfileDialog()
+    showProfileToast('密码已设置', 'success')
   } catch (error) {
-    profileError.value = error?.response?.data?.error || error?.message || '设置失败，请稍后重试'
+    const message = error?.response?.data?.error || error?.message || '设置失败，请稍后重试'
+    profileError.value = message
+    showProfileToast(message, 'error')
   }
 }
 
@@ -650,6 +717,11 @@ const handleGlobalClick = (e) => {
 onMounted(() => document.addEventListener('click', handleGlobalClick))
 onBeforeUnmount(() => document.removeEventListener('click', handleGlobalClick))
 onBeforeUnmount(() => cleanupAvatarPreview())
+onBeforeUnmount(() => {
+  if (profileToastTimer) {
+    clearTimeout(profileToastTimer)
+  }
+})
 
 watch(() => authStore.isAuthenticated, async (isAuthenticated) => {
   if (isAuthenticated) {
@@ -1343,10 +1415,46 @@ watch(() => authStore.isAuthenticated, async (isAuthenticated) => {
   font-size: 0.72rem;
 }
 
+.avatar-preset-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 0.74rem;
+}
+
+.avatar-preset-head button {
+  border: none;
+  background: transparent;
+  color: var(--brand);
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.avatar-preset-head button:disabled {
+  color: var(--text-muted);
+  cursor: wait;
+}
+
 .avatar-presets {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
+}
+
+.avatar-preset-empty {
+  grid-column: 1 / -1;
+  min-height: 42px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--line-soft);
+  border-radius: 12px;
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  background: #fafafa;
 }
 
 .avatar-preset-btn {
@@ -1421,6 +1529,70 @@ watch(() => authStore.isAuthenticated, async (isAuthenticated) => {
 
 .profile-feedback.is-notice {
   color: #047857;
+}
+
+.profile-toast {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 1200;
+  min-width: 210px;
+  max-width: min(360px, calc(100vw - 32px));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  border: 1px solid rgba(124, 58, 237, 0.2);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--text-strong);
+  box-shadow: 0 18px 48px rgba(76, 29, 149, 0.18);
+  backdrop-filter: blur(14px);
+  font-size: 0.88rem;
+  font-weight: 700;
+  transform: translate(-50%, -50%);
+}
+
+.profile-toast.is-success {
+  border-color: rgba(124, 58, 237, 0.24);
+}
+
+.profile-toast.is-error {
+  border-color: rgba(220, 38, 38, 0.22);
+  box-shadow: 0 18px 48px rgba(127, 29, 29, 0.14);
+}
+
+.profile-toast-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  background: #f5f3ff;
+  color: var(--brand);
+}
+
+.profile-toast.is-error .profile-toast-icon {
+  background: #fff1f2;
+  color: #dc2626;
+}
+
+.profile-toast-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.profile-toast-enter-active,
+.profile-toast-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.profile-toast-enter-from,
+.profile-toast-leave-to {
+  opacity: 0;
+  transform: translate(-50%, calc(-50% - 8px)) scale(0.98);
 }
 
 .modal-btn.primary {

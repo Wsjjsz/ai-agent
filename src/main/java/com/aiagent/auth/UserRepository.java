@@ -17,10 +17,13 @@ public class UserRepository {
 
     private final JdbcTemplate jdbcTemplate;
     private final Set<String> blockedUsernames;
+    private final ApihzRandomAvatarService randomAvatarService;
 
     public UserRepository(JdbcTemplate jdbcTemplate,
-                          @Value("${app.auth.blocked-usernames:demo,analyst,admin}") String blockedUsernames) {
+                          @Value("${app.auth.blocked-usernames:demo,analyst,admin}") String blockedUsernames,
+                          ApihzRandomAvatarService randomAvatarService) {
         this.jdbcTemplate = jdbcTemplate;
+        this.randomAvatarService = randomAvatarService;
         this.blockedUsernames = Arrays.stream(blockedUsernames.split(","))
                 .map(this::normalizeUsername)
                 .filter(username -> !username.isBlank())
@@ -96,6 +99,7 @@ public class UserRepository {
         String digits = phone.replaceAll("\\D", "");
         String nickname = "手机用户" + digits.substring(Math.max(0, digits.length() - 4));
         String usernameBase = "phone_" + digits;
+        String avatarUrl = randomAvatarService.randomAvatarUrl().orElse("");
         for (int attempt = 0; attempt < 3; attempt++) {
             String username = attempt == 0
                     ? usernameBase
@@ -107,10 +111,10 @@ public class UserRepository {
                         normalizeUsername(username),
                         "sms_login_only",
                         nickname,
-                        null,
+                        blankToNull(avatarUrl),
                         phone
                 );
-                return new AuthenticatedUser(id, normalizeUsername(username), nickname, "");
+                return new AuthenticatedUser(id, normalizeUsername(username), nickname, avatarUrl);
             } catch (DuplicateKeyException ignored) {
                 existing = findByPhone(phone);
                 if (existing.isPresent()) {

@@ -33,19 +33,22 @@ public class AuthController {
     private final SmsCodeService smsCodeService;
     private final AvatarStorageService avatarStorageService;
     private final ChatHistoryRepository chatHistoryRepository;
+    private final ApihzRandomAvatarService randomAvatarService;
 
     @Value("${app.trust-proxy-headers:false}")
     private boolean trustProxyHeaders;
 
     public AuthController(UserRepository userRepository, PasswordService passwordService, TokenService tokenService,
                           SmsCodeService smsCodeService, AvatarStorageService avatarStorageService,
-                          ChatHistoryRepository chatHistoryRepository) {
+                          ChatHistoryRepository chatHistoryRepository,
+                          ApihzRandomAvatarService randomAvatarService) {
         this.userRepository = userRepository;
         this.passwordService = passwordService;
         this.tokenService = tokenService;
         this.smsCodeService = smsCodeService;
         this.avatarStorageService = avatarStorageService;
         this.chatHistoryRepository = chatHistoryRepository;
+        this.randomAvatarService = randomAvatarService;
     }
 
     @PostMapping("/login")
@@ -112,6 +115,16 @@ public class AuthController {
         AuthenticatedUser user = AuthContext.requireUser(request);
         String avatarUrl = avatarStorageService.save(user.id(), file);
         return Map.of("success", true, "avatarUrl", avatarUrl);
+    }
+
+    @GetMapping("/avatar/random")
+    public Map<String, Object> randomAvatars(@RequestParam(defaultValue = "6") int count,
+                                             @RequestParam(defaultValue = "false") boolean refresh) {
+        int safeCount = Math.max(1, Math.min(count, 12));
+        return Map.of(
+                "success", true,
+                "avatars", randomAvatarService.avatarOptions(safeCount, refresh)
+        );
     }
 
     @GetMapping("/avatar/file/{fileName}")

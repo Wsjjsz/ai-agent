@@ -101,17 +101,15 @@ const presetId = computed(() => {
 
 const fallbackStyle = computed(() => {
   if (presetId.value && presetPalettes[presetId.value]) {
-    const [background, border, text] = presetPalettes[presetId.value]
+    const [background, , text] = presetPalettes[presetId.value]
     return {
       background,
-      borderColor: border,
       color: text
     }
   }
   if (props.variant === 'brand') {
     return {
       background: 'linear-gradient(135deg, var(--brand), var(--brand-strong))',
-      borderColor: 'var(--brand-strong)',
       color: '#ffffff'
     }
   }
@@ -123,7 +121,6 @@ const fallbackStyle = computed(() => {
   const [from, to, text] = palettes[hash % palettes.length]
   return {
     background: `linear-gradient(135deg, ${from}, ${to})`,
-    borderColor: to,
     color: text
   }
 })
@@ -131,7 +128,6 @@ const fallbackStyle = computed(() => {
 const avatarStyle = computed(() => {
   if (avatarUrl.value && props.variant === 'brand') {
     return {
-      borderColor: 'var(--brand-strong)',
       color: 'var(--brand-strong)'
     }
   }
@@ -151,7 +147,8 @@ const avatarStyle = computed(() => {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  border: 2px solid currentColor;
+  border: none;
+  box-shadow: none;
   overflow: hidden;
 }
 

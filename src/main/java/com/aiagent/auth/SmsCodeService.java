@@ -59,6 +59,7 @@ public class SmsCodeService {
         this.redisTemplate = redisTemplateProvider.getIfAvailable();
     }
 
+    @Transactional
     public void sendLoginCode(String rawPhone, String countryCode, String ipAddress, String deviceId) {
         String phone = normalizePhone(rawPhone, countryCode);
         if (trySendLoginCodeWithRedis(phone, ipAddress, deviceId)) {
@@ -85,9 +86,9 @@ public class SmsCodeService {
         }
 
         String code = generateCode();
-        codeRepository.create(phone, hash(phone, code), LOGIN_SCENE, now.plusSeconds(smsTtlSeconds),
+        String deliveredCode = smsCodeSender.sendLoginCode(phone, code);
+        codeRepository.create(phone, hash(phone, deliveredCode), LOGIN_SCENE, now.plusSeconds(smsTtlSeconds),
                 normalizeClientValue(ipAddress, 64), normalizeClientValue(deviceId, 128));
-        smsCodeSender.sendLoginCode(phone, code);
     }
 
     @Transactional
@@ -148,13 +149,19 @@ public class SmsCodeService {
             }
 
             String code = generateCode();
+            String deliveredCode;
+            try {
+                deliveredCode = smsCodeSender.sendLoginCode(phone, code);
+            } catch (RuntimeException e) {
+                redisTemplate.delete(resendKey);
+                throw e;
+            }
             String codeKey = smsKey("code", phone);
             redisTemplate.opsForHash().putAll(codeKey, Map.of(
-                    "hash", hash(phone, code),
+                    "hash", hash(phone, deliveredCode),
                     "attempts", "0"
             ));
             redisTemplate.expire(codeKey, Duration.ofSeconds(smsTtlSeconds));
-            smsCodeSender.sendLoginCode(phone, code);
             return true;
         } catch (ResponseStatusException e) {
             throw e;

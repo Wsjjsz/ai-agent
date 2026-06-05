@@ -1,6 +1,9 @@
 spring:
   application:
     name: ai-agent
+  autoconfigure:
+    exclude:
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeChatAutoConfiguration
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:prod}
   lifecycle:
@@ -38,8 +41,8 @@ spring:
       chat:
         options:
           # 当前应用使用 Spring AI Alibaba 的 DashScope text-generation ChatModel。
-          # qwen-plus 对普通问答和工具调用更稳；长上下文可按需改为 qwen-max-longcontext。
-          model: ${DASHSCOPE_MODEL:qwen-long}
+          # 默认使用 qwen3.6-plus；可通过环境变量 DASHSCOPE_MODEL 切换。
+          model: ${DASHSCOPE_MODEL:qwen3.6-plus}
     ollama:
       base-url: http://localhost:11434
       chat:
@@ -98,6 +101,17 @@ search-api:
 exa:
   # 从环境变量 EXA_API_KEY 配置，不要提交真实密钥。
   api-key: ${EXA_API_KEY:}
+apihz:
+  # APIHZ 接口凭证，图片搜索接口文档：https://www.apihz.cn/
+  id: ${APIHZ_ID:}
+  key: ${APIHZ_KEY:}
+  image-search:
+    endpoint: ${APIHZ_IMAGE_SEARCH_ENDPOINT:https://cn.apihz.cn/api/img/apihzimgbaidu.php}
+  random-avatar:
+    endpoint: ${APIHZ_RANDOM_AVATAR_ENDPOINT:https://cn.apihz.cn/api/img/apihzimgtx.php}
+    img-type: ${APIHZ_RANDOM_AVATAR_IMG_TYPE:0}
+    timeout-ms: ${APIHZ_RANDOM_AVATAR_TIMEOUT_MS:8000}
+    cache-ttl-seconds: ${APIHZ_RANDOM_AVATAR_CACHE_TTL_SECONDS:1800}
 # 应用 API Key 认证（可选，留空则跳过认证）
 app:
   api-key: ${APP_API_KEY:}
@@ -108,6 +122,8 @@ app:
       worker-threads: ${APP_AI_QUEUE_WORKER_THREADS:8}
       capacity: ${APP_AI_QUEUE_CAPACITY:200}
       offer-timeout-ms: ${APP_AI_QUEUE_OFFER_TIMEOUT_MS:200}
+  dashscope:
+    compatible-base-url: ${APP_DASHSCOPE_COMPATIBLE_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
   auth:
     jwt-secret: ${APP_AUTH_JWT_SECRET:ai-agent-local-dev-secret-change-me}
     token-ttl-seconds: 604800
@@ -122,6 +138,16 @@ app:
     avatar-dir: tmp/avatar
     blocked-usernames: ${APP_AUTH_BLOCKED_USERNAMES:demo,analyst,admin}
     sms-provider: ${APP_AUTH_SMS_PROVIDER:mock}
+    sms-apihz:
+      endpoint: ${APP_AUTH_SMS_APIHZ_ENDPOINT:http://101.35.2.25/api/sms/dfapi.php}
+      api-id: ${APP_AUTH_SMS_APIHZ_API_ID:129}
+      template: ${APP_AUTH_SMS_APIHZ_TEMPLATE:}
+      id-param: ${APP_AUTH_SMS_APIHZ_ID_PARAM:id}
+      key-param: ${APP_AUTH_SMS_APIHZ_KEY_PARAM:key}
+      phone-param: ${APP_AUTH_SMS_APIHZ_PHONE_PARAM:phone}
+      content-param: ${APP_AUTH_SMS_APIHZ_CONTENT_PARAM:content}
+      api-id-param: ${APP_AUTH_SMS_APIHZ_API_ID_PARAM:apiid}
+      timeout-ms: ${APP_AUTH_SMS_APIHZ_TIMEOUT_MS:8000}
     sms-http:
       endpoint: ${APP_AUTH_SMS_HTTP_ENDPOINT:}
       secret: ${APP_AUTH_SMS_HTTP_SECRET:}

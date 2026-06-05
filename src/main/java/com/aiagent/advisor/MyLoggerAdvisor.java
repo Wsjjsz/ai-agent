@@ -1,7 +1,6 @@
 package com.aiagent.advisor;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.client.ChatClientMessageAggregator;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
@@ -47,7 +46,18 @@ public class MyLoggerAdvisor implements CallAdvisor, StreamAdvisor {
 	@Override
 	public Flux<ChatClientResponse> adviseStream(ChatClientRequest chatClientRequest, StreamAdvisorChain chain) {
 		chatClientRequest = before(chatClientRequest);
-		Flux<ChatClientResponse> chatClientResponseFlux = chain.nextStream(chatClientRequest);
-		return (new ChatClientMessageAggregator()).aggregateChatClientResponse(chatClientResponseFlux, this::observeAfter);
+		StringBuilder responseText = new StringBuilder();
+		return chain.nextStream(chatClientRequest)
+				.doOnNext(chatClientResponse -> {
+					String text = chatClientResponse.chatResponse() != null
+							&& chatClientResponse.chatResponse().getResult() != null
+							&& chatClientResponse.chatResponse().getResult().getOutput() != null
+							? chatClientResponse.chatResponse().getResult().getOutput().getText()
+							: null;
+					if (text != null) {
+						responseText.append(text);
+					}
+				})
+				.doOnComplete(() -> log.info("AI Response: {}", responseText));
 	}
 }

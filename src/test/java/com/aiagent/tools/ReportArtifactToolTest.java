@@ -33,6 +33,7 @@ class ReportArtifactToolTest {
                 "[{\"title\":\"核心结论 ⚠️\",\"content\":\"### 估值判断\\n关注盈利质量和估值安全边际。\"}]",
                 "{\"rows\":[[\"指标\",\"数值\"],[\"000001\",12.3],[\"000002\",\"8.9 🚀\"]]}",
                 "[{\"title\":\"测试图表\",\"svgPath\":\"" + chartPath + "\",\"insight\":\"图表已经嵌入报告。\"}]",
+                "[{\"title\":\"报告配图\",\"image\":\"" + chartPath + "\",\"description\":\"图片已经嵌入报告。\"}]",
                 "[{\"title\":\"示例来源\",\"link\":\"https://example.com\"}]"
         );
 
@@ -49,6 +50,8 @@ class ReportArtifactToolTest {
         assertTrue(!json.toString().contains("pptxPath"));
 
         String markdown = Files.readString(Path.of(json.getStr("markdownPath")), StandardCharsets.UTF_8);
+        assertTrue(markdown.contains("## 相关图片"));
+        assertTrue(markdown.contains("![报告配图](data:image/svg+xml;base64,"));
         assertTrue(markdown.contains("![测试图表](data:image/svg+xml;base64,"));
         assertTrue(markdown.contains("| 指标 | 数值 |"));
         assertTrue(!markdown.contains("文件："));
@@ -56,6 +59,7 @@ class ReportArtifactToolTest {
         try (ZipFile zipFile = new ZipFile(json.getStr("docxPath"))) {
             assertTrue(zipFile.getEntry("word/styles.xml") != null);
             assertTrue(zipFile.getEntry("word/media/image1.svg") != null);
+            assertTrue(zipFile.getEntry("word/media/image2.svg") != null);
             String documentXml = new String(zipFile.getInputStream(zipFile.getEntry("word/document.xml")).readAllBytes(), StandardCharsets.UTF_8);
             String relsXml = new String(zipFile.getInputStream(zipFile.getEntry("word/_rels/document.xml.rels")).readAllBytes(), StandardCharsets.UTF_8);
             assertTrue(!documentXml.contains("###"));

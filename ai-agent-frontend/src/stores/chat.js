@@ -19,6 +19,10 @@ import {
 } from '@/utils/agentParser'
 
 export const useChatStore = defineStore('chat', () => {
+  const BASIC_TYPING_FRAME_MS = 4
+  const BASIC_TYPING_MAX_FRAMES_PER_CHUNK = 18
+  const BASIC_PENDING_TEXT = '正在生成...'
+
   // State
   const messages = ref([])
   const connectionStatus = ref('disconnected')
@@ -48,6 +52,37 @@ export const useChatStore = defineStore('chat', () => {
 
   // Helper: wait
   const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+
+  const enqueueBasicTypewriter = (sessionEntry, sessionMessages, aiMessageIndex, chunk) => {
+    const text = String(chunk || '')
+    if (!text) return
+    sessionEntry.basicTypingChain = (sessionEntry.basicTypingChain || Promise.resolve()).then(async () => {
+      if (sessionEntry.pendingPlaceholder && aiMessageIndex < sessionMessages.length) {
+        sessionMessages[aiMessageIndex].content = ''
+        sessionEntry.pendingPlaceholder = false
+      }
+      const charsPerFrame = Math.max(1, Math.ceil(text.length / BASIC_TYPING_MAX_FRAMES_PER_CHUNK))
+      for (let i = 0; i < text.length; i += charsPerFrame) {
+        if (sessionEntry.cancelled) return
+        if (aiMessageIndex < sessionMessages.length) {
+          sessionMessages[aiMessageIndex].content += text.slice(i, i + charsPerFrame)
+        }
+        await wait(BASIC_TYPING_FRAME_MS)
+      }
+    })
+  }
+
+  const finalizeBasicAfterTyping = (sessionId, sessionEntry) => {
+    const chain = sessionEntry.basicTypingChain || Promise.resolve()
+    chain.then(() => {
+      if (sessionEntry.cancelled) return
+      sessionEntry.eventSource = null
+      if (chatId.value === sessionId) {
+        connectionStatus.value = 'disconnected'
+        activeConnections.delete(sessionId)
+      }
+    })
+  }
 
   // Start analysis hint progress
   const startAnalysisHintProgress = (sessionEntry, trace) => {
@@ -245,6 +280,7 @@ export const useChatStore = defineStore('chat', () => {
     // Close existing connection for this session if any
     const existing = activeConnections.get(sessionId)
     if (existing?.eventSource) {
+      existing.cancelled = true
       existing.eventSource.close()
     }
     clearSessionTimers(existing)
@@ -258,14 +294,17 @@ export const useChatStore = defineStore('chat', () => {
     // Add messages
     sessionMessages.push(createMessage(message, true))
     const aiMessageIndex = sessionMessages.length
-    sessionMessages.push(createMessage('', false))
+    sessionMessages.push(createMessage(BASIC_PENDING_TEXT, false))
 
     // Store in activeConnections
     const sessionEntry = {
       eventSource: null,
       messagesRef: sessionMessages,
       analysisHintTimer: null,
-      terminalFinalizeTimer: null
+      terminalFinalizeTimer: null,
+      basicTypingChain: Promise.resolve(),
+      pendingPlaceholder: true,
+      cancelled: false
     }
     activeConnections.set(sessionId, sessionEntry)
 
@@ -273,20 +312,15 @@ export const useChatStore = defineStore('chat', () => {
 
     const es = chatWithFinanceApp(message, sessionId, (data) => {
       if (data && data !== '[DONE]') {
-        if (aiMessageIndex < sessionMessages.length) {
-          sessionMessages[aiMessageIndex].content += data
-        }
+        enqueueBasicTypewriter(sessionEntry, sessionMessages, aiMessageIndex, data)
       }
       if (data === '[DONE]') {
-        sessionEntry.eventSource = null
-        if (chatId.value === sessionId) {
-          connectionStatus.value = 'disconnected'
-          activeConnections.delete(sessionId)
-        }
+        finalizeBasicAfterTyping(sessionId, sessionEntry)
         return
       }
     }, (error) => {
       console.error('SSE Error:', error)
+      sessionEntry.cancelled = true
       if (error?.status === 401 || error?.status === 429) {
         useAuthStore().openLoginModal()
       }

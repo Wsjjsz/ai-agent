@@ -60,15 +60,22 @@ APP_AUTH_JWT_SECRET=replace-with-32-plus-chars-secret
 APP_AUTH_SMS_CODE_SECRET=replace-with-32-plus-chars-secret
 APP_CORS_ALLOWED_ORIGINS=https://your-domain.com
 
-APP_AUTH_SMS_PROVIDER=http
-APP_AUTH_SMS_HTTP_ENDPOINT=https://your-sms-provider.example/send
-APP_AUTH_SMS_HTTP_SECRET=replace-with-sms-secret
+APP_AUTH_SMS_PROVIDER=apihz
+APP_AUTH_SMS_APIHZ_ENDPOINT=http://101.35.2.25/api/sms/dfapi.php
+APP_AUTH_SMS_APIHZ_API_ID=129
+APP_AUTH_SMS_APIHZ_TEMPLATE="您的登录验证码是 {code}，5分钟内有效，请勿泄露给他人。"
 
 DASHSCOPE_API_KEY=replace-with-your-dashscope-key
-DASHSCOPE_MODEL=qwen-long
-DASHSCOPE_MODEL_BACKUPS=qwen3.7-plus,qwen3.7-max,qwen3.6-plus,qwen3.6-flash,deepseek-v4-pro
+DASHSCOPE_MODEL=qwen3.6-plus
+DASHSCOPE_MODEL_BACKUPS=qwen3.6-plus,qwen3.7-plus,qwen3.7-max,qwen3.6-flash,deepseek-v4-pro
+APP_DASHSCOPE_COMPATIBLE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 EXA_API_KEY=replace-with-your-exa-key
 SEARCH_API_KEY=replace-with-your-search-key
+APIHZ_ID=replace-with-your-apihz-developer-id
+APIHZ_KEY=replace-with-your-apihz-key
+APIHZ_IMAGE_SEARCH_ENDPOINT=https://cn.apihz.cn/api/img/apihzimgbaidu.php
+APIHZ_RANDOM_AVATAR_ENDPOINT=https://cn.apihz.cn/api/img/apihzimgtx.php
+APIHZ_RANDOM_AVATAR_IMG_TYPE=0
 
 APP_RAG_VECTOR_STORE=pgvector
 APP_RAG_INDEX_ON_STARTUP=true
@@ -87,10 +94,9 @@ GRAFANA_PORT=7654
 当前账号已实测可用的 DashScope 文本模型：
 
 ```text
-qwen-long
+qwen3.6-plus
 qwen3.7-plus
 qwen3.7-max
-qwen3.6-plus
 qwen3.6-flash
 deepseek-v4-pro
 ```

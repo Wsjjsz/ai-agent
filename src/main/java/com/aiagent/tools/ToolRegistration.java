@@ -24,6 +24,15 @@ public class ToolRegistration {
     @Value("${exa.api-key:${EXA_API_KEY:}}")
     private String exaApiKey;
 
+    @Value("${apihz.id:${APIHZ_ID:}}")
+    private String apihzId;
+
+    @Value("${apihz.key:${APIHZ_KEY:}}")
+    private String apihzKey;
+
+    @Value("${apihz.image-search.endpoint:https://cn.apihz.cn/api/img/apihzimgbaidu.php}")
+    private String apihzImageSearchEndpoint;
+
     @Value("${app.tools.terminal.enabled:false}")
     private boolean terminalToolEnabled;
 
@@ -31,6 +40,11 @@ public class ToolRegistration {
     public ToolCallback[] allTools() {
         FileOperationTool fileOperationTool = new FileOperationTool();
         ExaSearchTool exaSearchTool = new ExaSearchTool(exaApiKey);
+        ApihzImageSearchTool apihzImageSearchTool = new ApihzImageSearchTool(
+                apihzId,
+                apihzKey,
+                apihzImageSearchEndpoint
+        );
         FinanceNewsSearchTool financeNewsSearchTool = new FinanceNewsSearchTool();
         NewsRssSearchTool newsRssSearchTool = new NewsRssSearchTool();
         MarketQuoteTool marketQuoteTool = new MarketQuoteTool();
@@ -43,6 +57,7 @@ public class ToolRegistration {
         List<Object> tools = new ArrayList<>();
         tools.add(fileOperationTool);
         tools.add(exaSearchTool);
+        tools.add(apihzImageSearchTool);
         if (searchApiEnabled) {
             tools.add(new WebSearchTool(searchApiKey));
         }

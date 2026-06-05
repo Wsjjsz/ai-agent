@@ -1,5 +1,6 @@
 package com.aiagent.config;
 
+import com.aiagent.auth.AuthContext;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -41,6 +42,12 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
                 || path.contains("/actuator")
                 || path.contains("/swagger")
                 || path.contains("/v3/api-docs")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        // JWT/Guest 认证过滤器已经建立了当前用户时，不再要求额外 API Key。
+        if (request.getAttribute(AuthContext.CURRENT_USER_ATTRIBUTE) != null) {
             filterChain.doFilter(request, response);
             return;
         }

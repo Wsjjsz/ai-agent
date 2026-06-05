@@ -29,12 +29,16 @@ import org.springframework.ai.tool.annotation.ToolParam;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 
 /**
  * 图文报告 PDF 生成工具，同时生成 HTML 预览文件。
  */
 public class RichPDFGenerationTool {
+
+    private static final ZoneId REPORT_ZONE = ZoneId.of("Asia/Shanghai");
+    private static final DateTimeFormatter REPORT_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private static final int MAX_NEWS_ITEMS = 6;
     private static final int MAX_QUOTES = 8;
@@ -76,7 +80,7 @@ public class RichPDFGenerationTool {
             files.add(file("HTML 预览", "html", previewPath.toString(), true));
             result.set("files", files);
             result.set("message", "Rich PDF generated successfully to: " + pdfPath + "\nPreview generated to: " + previewPath);
-            result.set("generatedAt", LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+            result.set("generatedAt", LocalDateTime.now(REPORT_ZONE).format(REPORT_TIME_FORMATTER));
             return result.toString();
         } catch (Exception e) {
             JSONObject error = JSONUtil.createObj();

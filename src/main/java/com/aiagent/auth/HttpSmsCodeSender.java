@@ -25,7 +25,7 @@ public class HttpSmsCodeSender implements SmsCodeSender {
     }
 
     @Override
-    public void sendLoginCode(String phone, String code) {
+    public String sendLoginCode(String phone, String code) {
         if (endpoint == null || endpoint.isBlank()) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "短信服务未配置");
         }
@@ -42,5 +42,6 @@ public class HttpSmsCodeSender implements SmsCodeSender {
         if (!response.isOk()) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "短信发送失败");
         }
+        return code;
     }
 }
